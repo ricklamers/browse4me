@@ -264,7 +264,7 @@ const App: React.FC<{ initialState: State }> = ({ initialState }) => {
           } else {
             if (!doingAction.current) {
               doingAction.current = true;
-              await do_action();
+              await doAction();
               doingAction.current = false;
             }
           }
@@ -371,32 +371,6 @@ async function main() {
 
 let anthropic: Anthropic | null = null;
 
-// // Main function to be executed after jQuery is loaded
-// async function setup_() {
-//   console.log("Setup");
-//   try {
-//     const apiKey = await getApiKey();
-//     anthropic = new Anthropic({
-//       apiKey: apiKey as string,
-//       dangerouslyAllowBrowser: true,
-//     });
-
-//     let state: State = await new Promise((resolve) => {
-//       // @ts-ignore
-//       chrome.storage.sync.get(['state'], function(result: { state?: State }) {
-//         resolve(result.state || { ...defaultState });
-//       });
-//     });
-
-//     if (!state.done) {
-//       loop()
-//     }
-//   } catch (error) {
-//     console.error("Error:", error);
-//   }
-// }
-
-
 async function getState(): Promise<State> {
   return new Promise<State>((resolve) => {
     // @ts-ignore
@@ -406,22 +380,8 @@ async function getState(): Promise<State> {
   });
 }
 
-// async function loop() {
-
-//   while (!state.done) {
-//     console.log("State:", state);
-//     console.log("Doing action");
-//     await do_action(state)
-//     // Sleep for a short duration to avoid overwhelming the system
-//     await new Promise(resolve => setTimeout(resolve, 2000));
-//     state = await getState();
-//   }
-// }
-
-
-
 // Function to perform the main action
-async function do_action() {
+async function doAction() {
   try {
     // Get a minified version of the current page HTML
     const minifiedHTML = await getMinifiedHTML();
