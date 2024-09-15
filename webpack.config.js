@@ -4,13 +4,25 @@ const CopyPlugin = require('copy-webpack-plugin');
 module.exports = {
   entry: {
     background: './src/background.js',
-    content: './src/content.js',
+    content: './src/content.ts',
     popup: './src/popup.js',
     options: './src/options.js'
   },
   output: {
     filename: '[name].js',
     path: path.resolve(__dirname, 'dist'),
+  },
+  module: {
+    rules: [
+      {
+        test: /\.tsx?$/,
+        use: 'ts-loader',
+        exclude: /node_modules/,
+      },
+    ],
+  },
+  resolve: {
+    extensions: ['.tsx', '.ts', '.js'],
   },
   plugins: [
     new CopyPlugin({
