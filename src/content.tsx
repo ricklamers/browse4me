@@ -178,7 +178,8 @@ const PromptUI = ({
   );
 };
 
-async function getMinifiedHTML() {
+async function getMinifiedHTML(): Promise<string> {
+  // @ts-ignore
   return await pageComm.eval(`(() => {
     const attributesToRemove = new Set(['lang', 'style', 'src', 'srcset']);
     return $('html').clone()
@@ -195,18 +196,40 @@ async function getMinifiedHTML() {
         attributesToRemoveForElement.forEach(attr => {
           $this.removeAttr(attr);
         });
-      }).end().html().replace(/\s+/g, ' ').trim();
+      }).end().html().trim();
   })()`);
 }
 
-const App = () => {
-  const [isVisible, setIsVisible] = useState(true);
-  const [prompt, setPrompt] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [historyDescriptions, setHistoryDescriptions] = useState([]);
-  const [isDone, setIsDone] = useState(true);
-  const doingAction = useRef(false);
 
+async function clearChromeStorage() {
+  return new Promise<void>((resolve) => {
+    // @ts-ignore
+    chrome.storage.sync.get(['apiKey'], (result) => {
+      const apiKey = result.apiKey;
+      // @ts-ignore
+      chrome.storage.sync.clear(() => {
+        // @ts-ignore
+        chrome.storage.sync.set({ apiKey }, () => {
+          console.log("Chrome storage cleared, except for API key");
+          resolve();
+        });
+      });
+    });
+  });
+}
+// @ts-ignore
+window.clear = clearChromeStorage;
+
+
+const App: React.FC<{ initialState: State }> = ({ initialState }) => {
+  
+  const [isVisible, setIsVisible] = useState(!initialState.done);
+  const [prompt, setPrompt] = useState(initialState.userRequest);
+  const [isLoading, setIsLoading] = useState(!initialState.done);
+  const [historyDescriptions, setHistoryDescriptions] = useState([]);
+  const [isDone, setIsDone] = useState(initialState.done);
+  const doingAction = useRef(false);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -223,32 +246,34 @@ const App = () => {
   }, [isVisible]);
 
   useEffect(() => {
-    let intervalId: NodeJS.Timeout | null = null;
-
     if (!isDone && isLoading) {
-      intervalId = setInterval(() => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+      intervalRef.current = setInterval(() => {
         // @ts-ignore
-        chrome.storage.sync.get(['state'], function(result) {
+        chrome.storage.sync.get(['state'], async function(result) {
           const state = result.state || defaultState;
           if (state.done) {
             setIsDone(true);
+            setPrompt('');
             setIsLoading(false);
+            setIsVisible(false);
             doingAction.current = false;
-            if (intervalId) clearInterval(intervalId);
+            if (intervalRef.current) clearInterval(intervalRef.current);
           } else {
             if (!doingAction.current) {
               doingAction.current = true;
-              do_action();
-              let state = await getState();
+              await do_action();
               doingAction.current = false;
             }
           }
         });
-      }, 4000);
+      }, 1000);
     }
 
     return () => {
-      if (intervalId) clearInterval(intervalId);
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [isDone, isLoading]);
 
@@ -333,8 +358,11 @@ async function main() {
       dangerouslyAllowBrowser: true,
     });
 
+    // get state to init App
+    let fetchedState = await getState();
+
     // Render the root component
-    root.render(<App />);
+    root.render(<App initialState={fetchedState} />);
   } catch (error) {
     console.error("Error in main function:", error);
   }
@@ -397,6 +425,8 @@ async function do_action() {
   try {
     // Get a minified version of the current page HTML
     const minifiedHTML = await getMinifiedHTML();
+    // Truncate minifiedHTML to 10000 characters if it's longer
+    const truncatedHTML = minifiedHTML.length > 10000 ? minifiedHTML.slice(0, 10000) : minifiedHTML;
     let state: State = await getState();
     // first message
     const msg = await anthropic!.messages.create({
@@ -405,27 +435,38 @@ async function do_action() {
       messages: [
         { 
           role: "user", 
-          content: `Given this minified HTML of a webpage: "${minifiedHTML}", generate jQuery code to perform this user request: "${state.userRequest}". 
+          content: `
           
-          Analyze the HTML of the page carefully, only write code that targets elements on the current page (using the HTML given).
-          When using click, make sure to get the native click on the native element, not a simulated click.
-          This action is part of a loop that continues until the user request is satisfied. You can navigate to different pages, and the loop will continue.
-          The action does not have to be satisfied in one step, but the fewer steps the better.
-          Only write code that will be executed in the current page, not code that will be executed after navigation.
-         
-          Coding rules:
-          - Never use query selectors based on index, because we remove some elements that aren't informative.
+          <page html>
+          ${truncatedHTML}
+          </page html>
+          
+          <user request>
+          ${state.userRequest}
+          </user request>
 
-          History of previous descriptions:
-          
+          <current url>
+          ${document.URL}
+          </current url>
+
+          <history of previous descriptions>
           \`\`\`history
           ${state.descriptionHistory.join('\n')}
           \`\`\`
+          </history of previous descriptions>
 
-          If this is the first request, the previous history will be empty.
-
-          If according the history and the html, the user request is satisfied, you can set done to true.
+          Everything that is in the history **has already been completed**.
           
+          To fulfil the user request, you can generate jQuery code. If you are done, you don't need to generate any code, just set done to true.
+         
+          Coding rules:
+          - Never use query selectors based on index, because we remove some elements that aren't informative.
+          - Don't define const, only define 'var' variables.
+          - When using click, make sure to get the native click on the native element, not a simulated click.
+          - Only write code that will be executed in the current page, not code that will be executed after navigation.
+          - The user request does not have to be satisfied in one go, but try to do everything that can be done on the current page.
+          - Only use jQuery to select the elements, actions should always use vanilla JS on the native element.
+
           Please provide your response in the following format:
           
           Description: [A single line describing what the code does]
@@ -434,6 +475,8 @@ async function do_action() {
           [Your generated jQuery code here]
           \`\`\`
           Done: [true/false]
+
+          Set Done to true if the user request is satisfied.
           `
         }
       ],
@@ -457,13 +500,15 @@ async function do_action() {
     state.messages.push(msg);
     // Update state
     state.done = done;
+    if(done){
+      state.userRequest = '';
+    }
     // @ts-ignore
     chrome.storage.sync.set({ state });
     
     // Execute the generated jQuery code in the actual page
-    if (!done && generatedCode) {
-      const result = await pageComm.eval(generatedCode);
-      console.log("Result of generated code:", result);
+    if (generatedCode) {
+      await pageComm.eval(generatedCode, false);
     } else {
       console.log("No code was generated.");
     }
