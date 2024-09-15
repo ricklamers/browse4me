@@ -10,7 +10,7 @@
       "runtimeArgs": [
         "--load-extension=${workspaceFolder}/dist",
         "--disable-extensions-except=${workspaceFolder}/dist",
-        "--start-maximized"
+        "--start-maximized",
       ],
       "webRoot": "${workspaceFolder}",
       "sourceMaps": true,

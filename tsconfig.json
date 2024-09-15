@@ -7,6 +7,12 @@
     "strict": true,
     "skipLibCheck": true,
     "allowJs": true,
-    "checkJs": false
-  }
+    "checkJs": false,
+    "jsx": "react",
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "node"
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.css"],
+  "exclude": ["node_modules"]
 }
