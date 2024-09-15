@@ -2,6 +2,8 @@
 
 browse4️⃣me is an AI-powered browser extension designed to enhance your browsing experience. It uses AI technology to assist you with various web tasks and interactions.
 
+<img width="1177" alt="Screenshot 2024-09-14 at 9 48 24 PM" src="https://github.com/user-attachments/assets/5e78bd80-feea-404e-88f3-c727221f4e5a">
+
 ## Features
 
 - AI-powered browsing assistance
